@@ -25,7 +25,11 @@ struct io_header
   double Omega0;
   double OmegaLambda;
   double HubbleParam;
-  char fill[256 - 6 * 4 - 6 * 8 - 2 * 8 - 2 * 4 - 6 * 4 - 2 * 4 - 4 * 8];	/* fills header structure to 256 Bytes */
+  int flag_stellarage;
+  int flag_metals;
+  unsigned int npartTotalHighWord[6];
+  int  flag_entropy_instead_u;
+  char fill[60];	/* fills header structure to 256 Bytes */
 } header;
 
   #define MAXLEN_FILENAME 100
@@ -312,7 +316,7 @@ int main(int argc, char *argv[])
   char pfname[200];
   char fname[200];
   //char buf[300];
-  float density_ratio, d1, d2, P1, P2, rho1, rho2, gamma;
+  float density_ratio, d1, d2, P1, P2, rho1, rho2, gamma, U1, U2;
   int N1, N2;
   size_t bytes;
   float *block;
@@ -339,11 +343,12 @@ int main(int argc, char *argv[])
       header.npart[i] = 0;
       header.npartTotal[i] = 0;
       header.mass[i] = 0;
+      header.npartTotalHighWord[i] = 0;
     }
 
   header.npart[0] = 200;//number of gas particles
   header.npartTotal[0] = header.npart[0];//assumes no other particle types
-  header.mass[0] = 1.67;//mass of gas particles
+  header.mass[0] = 1;//mass of gas particles
   density_ratio = 8;//ratio of density in first half to second half of box
   N2=(header.npart[0]-2)/(density_ratio+1);
   N1=header.npart[0]-N2;
@@ -351,18 +356,22 @@ int main(int argc, char *argv[])
   d1=(All.BoxSize/2)/(float)(N1);
   d2=(All.BoxSize/2)/(float)(N2-1);
   printf("d1=%f d2=%f\n", d1, d2);
-  P1 = 30.0; //P1 is the pressure in the first half of the box
-  P2 = 0.14;
-  rho1 = 1.0;//density in first half of box
-  rho2 = 0.125;
+  rho1 = header.mass[0]/(pow(d1,3));//density in first half of box
+  rho2 = header.mass[0]/(pow(d2,3));
+  P1 = 30.0 * rho1; //P1 is the pressure in the first half of the box
+  P2 = 0.14/0.125 * rho2;
   gamma = 1.4; //the adiabatic index
+  U1 = (P1 / rho1) / (gamma - 1);
+  U2 = (P2 / rho2) / (gamma - 1);
 
   header.time = 0;//doesnt actually matter what this is, it's ignored in the IC
-  //header.redshift = 0;
+  header.redshift = 0;
 
   header.flag_sfr = 0;
   header.flag_feedback = 0;
   header.flag_cooling = 0;
+  header.flag_stellarage = 0;
+  header.flag_metals = 0;
   header.BoxSize = All.BoxSize;
   header.Omega0 = All.Omega0;
   header.OmegaLambda = All.OmegaLambda;
@@ -402,11 +411,11 @@ seed = time (NULL) * getpid();
       //set internal energies per unit mass
       if(i<N1)
 	{
-	  P[i].U = (P1 / rho1) / (gamma - 1);
+	  P[i].U = U1;
 	}
       if(i>=N1)
 	{
-	  P[i].U = (P2 / rho2) / (gamma - 1);
+	  P[i].U = U2;
 	}
       printf("Pos%d = %f\t U%d = %f\n", i+1, P[i].Pos[0], i+1, P[i].U);
     }
